@@ -163,8 +163,74 @@ tidy_books %>%
 #Looking at units beyond just words
 
 ```{r}
-
+p_and_p_sentences<-tibble(text = janeeyre) %>%
+  unnest_tokens(sentence, text, token = "sentences")
 ```
+
+#Task three
+```{r}
+
+library(devtools)
+devtools::install_github("Truenumbers/tnum/tnum")
+
+#'tnum' package
+library(knitr)
+library(gutenbergr)
+library(tidyverse)
+library(tnum)
+
+tnum.authorize("mssp1.bu.edu")
+tnum.getDBPathList(taxonomy = "subject", levels = 1)
+tnum.setSpace("test2")
+
+jane_eyre<-gutenberg_download(gutenberg_id = 1260)  ## download Jane Eyre
+
+jane_eyre_txt<-readLines("jane.txt")
+source("Book2TN-v3-hw.R")
+
+## not run: tnBooksFromLines(jane_eyre$text, "jane_eyre")
+
+tnum.getDBPathList(taxonomy = "subject", levels = 2)
+
+#Explore the TNs that contain Jane Eyre text
+## use query to check TNs
+q20<-tnum.query("jane_eyre# has *",max = 3)
+df20<-tnum.objectsToDf(q20)
+
+q24<-tnum.query("jane_eyre/heading# has *",max = 60)
+df24<-tnum.objectsToDf(q24)
+
+q11<-tnum.query("jane_eyre/heading:0011# has *")
+df11<-tnum.objectsToDf(q11)
+ord_ch1<-unlist(tnum.query("jane_eyre/heading:0011# has ordinal"))
+
+ord_ch2<-unlist(tnum.query("jane_eyre/heading:0012# has ordinal"))
+
+q25<-tnum.query("jane_eyre/heading:0012# has *")
+df25<-tnum.objectsToDf(q25)
+
+ch1_txt<-tnum.query("jane_eyre/section:0011/paragraph:0002/# has text", max = 30)
+ch1_txt_df<-tnum.objectsToDf(ch1_txt)
+ch1_txt_df$string.value
+
+ch2_txt<-tnum.query("jane_eyre/section:0011/paragraph:0002/sentence:# has *", max = 30)
+ch2_txt_df<-tnum.objectsToDf(ch2_txt)
+ch2_txt_df$string.value
+
+length(ch2_txt_df$string.value)
+
+q11<-tnum.query("jane_eyre/section:0011/paragraph:0001/# has *", max = 30)
+df11<-tnum.objectsToDf(q11)
+```
+
+#Sentimentr
+
+```{r}
+library(sentimentr)
+bb<-jane_eyre$text[35:45]
+ab<-sentiment(bb)
+```
+
 
 
 ## R Markdown
