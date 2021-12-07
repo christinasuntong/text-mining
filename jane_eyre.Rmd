@@ -169,7 +169,6 @@ p_and_p_sentences<-tibble(text = janeeyre) %>%
 
 #Task three
 ```{r}
-
 library(devtools)
 devtools::install_github("Truenumbers/tnum/tnum")
 
@@ -180,18 +179,142 @@ library(tidyverse)
 library(tnum)
 
 tnum.authorize("mssp1.bu.edu")
-tnum.getDBPathList(taxonomy = "subject", levels = 1)
+
+tnum.getDBPathList(taxonomy = "subject", levels = 3)
 tnum.setSpace("test2")
 
-jane_eyre<-gutenberg_download(gutenberg_id = 1260)  ## download Jane Eyre
-
+#jane_eyre<-gutenberg_download(gutenberg_id = 1260)  ## download Jane Eyre
 jane_eyre_txt<-readLines("jane.txt")
 source("Book2TN-v3-hw.R")
+
+#tnBooksFromLines(jane_eyre_txt, "je")
+
 
 ## not run: tnBooksFromLines(jane_eyre$text, "jane_eyre")
 
 tnum.getDBPathList(taxonomy = "subject", levels = 2)
+```
 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+q111 <- tnum.query(query = "jane_eyre# has ordinal", max=500)   ## everything
+df111 <- tnum.objectsToDf(q111)
+
+## show ordered objects in document
+q112 <- tnum.query("jane_eyre# has ordinal")   ## show ordered objects in document
+df112 <- tnum.objectsToDf(q112)
+
+## focus on one paragraph -- note the word count for each sentence
+q3 <- tnum.query("jane_eyre/section:0001/paragraph:0005# has count#")  # just 1 para
+df3 <- tnum.objectsToDf(q3) %>% filter(date == "2021-12-03")
+df3
+
+
+## and now look at the text in a sentence
+q1 <- tnum.query("jane_eyre/section:0001/paragraph:0005/sentence:0002# has text")
+df1 <- tnum.objectsToDf(q1) %>% filter(date == "2021-12-03")
+df1
+
+## To extract a paragraph of text
+q4 <- tnum.query("jane_eyre/section:0001/paragraph:0005/sentence# has text", max = 10)
+df4 <- tnum.objectsToDf(q4) %>% filter(date == "2021-12-03")
+para_text4 <- df4 %>% pull(string.value) %>% 
+                      str_replace_all("\"","") %>% 
+                      str_flatten(collapse = " ")
+
+## steps to understand
+# a <- para_text4[4]
+# a
+# 
+# b <- str_replace_all(a,"\"","")   
+# b
+# 
+# c <- para_text4
+# c
+# 
+# c <- str_replace_all(a,"\"","")  
+# 
+```
+
+# Use tnum in text analysis
+
+```{r}
+##  The ordinal numbers for the entire book 
+##  show the sequence of objects in order of their appearance.
+w10 <- tnum.query("jane_eyre# has ordinal", max=1800)
+wdf10 <- tnum.objectsToDf(w10)
+
+## Examing the first 50 TNs  makes it easy to see the Table of Contents
+## and to see that object 22 is the heading at the start of Chapter 1
+
+
+## This shows the Table of Contents
+w11 <- tnum.query("jane_eyre# has text", start = 3 ,max=18)
+wdf11 <- tnum.objectsToDf((w11))
+
+table_of_contents <- wdf11 %>% select(string.value) 
+
+
+## Look at just the headings shows the structure of the book
+w13 <- tnum.query("jane_eyre/heading# has text", max=40)
+wdf13 <- tnum.objectsToDf(w13)
+
+
+## It may look like the table of contents is repeated twice,
+## but examing the ordinals produces chapter list that includes the 
+## ordinal location for the heading of each chapter
+w14 <- tnum.query("jane_eyre/heading# has ordinal", max=40)
+wdf14 <- tnum.objectsToDf(w14)
+
+chapter_locations <- left_join(select(wdf13, subject, string.value), 
+                               select(wdf14, subject, numeric.value)) 
+## add column for chapter number
+library(magrittr)
+chapter_locations %<>% mutate(chapter=1:24)
+
+w15 <- tnum.query("jane_eyre/section:0011# has ordinal")
+wdf15 <- tnum.objectsToDf(w15)
+
+
+
+#a <- chapter_locations %>% filter(chapter==2) %>% 
+                           select(numeric.value) %>% 
+                           unlist()
+
+#a <- str_pad(as.character(a),4,side="left",pad="0")
+
+#b <- paste0("wells12/hw12/section:",a,"#", " has ordinal")
+
+#b
+
+
+## chapter 1 para 1, word counts for the 3 sentences in para 1
+q20 <- tnum.query("jane_eyre# has *", max=3)
+df20 <- tnum.objectsToDf(q20)
+
+#  chapter locations  ordinal numbers
+ord_ch1 <- unlist(tnum.query("jane_eyre/heading:0011# has ordinal"))
+ord_ch2 <- unlist(tnum.query("jane_eyre/heading:0012# has ordinal"))
+
+
+ch1_txt <- tnum.query("jane_eyre/section:0011/paragraph:0002/# has text", max=30)
+
+ch1_txt_df <- tnum.objectsToDf(ch1_txt)
+ch1_txt_df$string.value
+
+ch2_txt <- tnum.query("jane_eyre/section:0011/paragraph:0002/sentence:# has *", max=30)
+ch2_txt_df <- tnum.objectsToDf(ch2_txt)
+
+ch2_txt_df$string.value
+
+length(ch2_txt_df$string.value)
+
+
+q21 <- tnum.query("jane_eyre/section:0011/paragraph:0001/# has *", max = 30)
+df21 <- tnum.objectsToDf(q21)
+
+
+####Before
 #Explore the TNs that contain Jane Eyre text
 ## use query to check TNs
 q20<-tnum.query("jane_eyre# has *",max = 3)
@@ -227,8 +350,63 @@ df11<-tnum.objectsToDf(q11)
 
 ```{r}
 library(sentimentr)
-bb<-jane_eyre$text[35:45]
-ab<-sentiment(bb)
+jane_1 <- get_sentences(para_text4)
+
+## to get sentiment scores by sentence
+sentiment(jane_1)
+
+## to get sentiment scores aggregated by paragraph
+sentiment_by(jane_1)
+
+```
+
+#Sense and Sensibility
+
+```{r}
+#create tags
+tnum.tagByQuery("jane_eyre/# has*= REGEXP(\"friend\")",adds = ("ref:friend"))
+
+tnum.tagByQuery("jane_eyre/# has*=REGEXP(\"Jane|Helen\")",adds = ("ref:JH"))
+
+
+#make plots(before making plots, I create a function to turn all the chapters into a vector)
+getchapter<-function(query_t2){
+  n= length(query_t2)
+  chapterlist<-1:n
+  for (i in 1:n) {
+    chapterlist[i]<-
+      as.character(substring(str_split(tnum.getAttrFromList(query_t2[i], "subject"), "[:/]")[[1]][4], 9))
+  }
+  return(chapterlist)
+}
+
+#love
+friend<-tnum.query("@ref:friend", max = 20)
+friend_df<-tnum.objectsToDf(friend)
+
+ggplot() + geom_bar(mapping = aes(getchapter(friend)), stat = "count")+
+  labs(x="Chapter", title = "Frequency of 'friend'")
+
+#JE
+jh<-tnum.query("@ref:JH", max = 50)
+jh_df<-tnum.objectsToDf(jh)
+ggplot() + geom_bar(mapping = aes(getchapter(je)), stat = "count") +
+  labs(x="Chapter", title = "Frequency of Jane and Edward")
+
+#JR
+jr<-tnum.query("@ref:JR", max = 50)
+jrdf<-tnum.objectsToDf(jr)
+ggplot() + geom_bar(mapping = aes(getchapter(jr)), stat = "count") +
+  labs(x="Chapter", title = "Frequency of Jane and Rochester")
+
+
+```
+
+## Couples with love
+
+```{r}
+friendjh<-tnum.query("@[ref:friend,ref:JH]", max = 50)
+
 ```
 
 
