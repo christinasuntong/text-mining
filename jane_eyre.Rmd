@@ -99,14 +99,18 @@ ggplot(jane_sentiment,aes(index, sentiment,)) +
 We can see how the plot of each novel changes toward more positive or negative sentiment over the trajectory of the story. From the plot above, I find that there are more negative sentiments during the early index and more positive sentiments during the late index. I think this fits the story. During Eyre's childhood, she was abuted by her aunt,Sarah Reed, she did not have a happy childhood in her early years. Therefore the sentiment is negative. But when she met Rochester as written in the late plots, she was married with him and had a sweet life. So there are more positive ones here.
 
 # Compare the three sentiment dictionaries
+ - AFINN: the AFINN lexicon measures sentiment with a numeric score between -5 and 5;
+ - Bing: the Bing lexicon categorizes words in a binary fashion into positive and negative categories;
+ - nrc: the nrc lexicon categorizes words in a binary fashion ("yes"/"no") into categories of positive, negative, anger, anticipation, disgust, fear, joy, sadness, surprise and trust.
 
 ```{r}
+# AFINN
 afinn<-tidy_books %>%
   inner_join(get_sentiments("afinn")) %>%
   group_by(index = linenumber %/% 60) %>%
   summarise(sentiment = sum(value)) %>%
   mutate(method = "AFINN")
-
+# Bing
 bing_and_nrc<-bind_rows(
   tidy_books %>%
     inner_join(get_sentiments("bing")) %>%
@@ -122,14 +126,20 @@ bing_and_nrc<-bind_rows(
               values_fill = 0) %>%
   mutate(sentiment = positive - negative)
 
-#visualize
+# Visualize
 bind_rows(afinn,
           bing_and_nrc) %>%
   ggplot(aes(index, sentiment, fill = method)) +
   geom_col(show.legend = FALSE) +
   facet_wrap(~method, ncol = 1, scales = "free_y")
 
-#Why the result for the NRC lexicon biased so high in sentiment compared to the Bing et al. result?
+```
+
+The three different lexicons for calculating sentiment give results that are different in an absolute sense but have similar relative trajectories through the novel. We can see similar dips and peaks in sentiment at about the same places in the novel, but the absolute values are significantly different. The AFINN lexicon gives the largest absolute values, with high positive values. The Bing lexicon has lower absolute values. The NRC lexicon are shifted higher realtive to the other two, labeling the text more positively.
+
+```{r}
+## Why the result for the NRC lexicon biased so high in sentiment compared to the Bing result?
+# How many positive and negative words are in these lexicons?
 get_sentiments("nrc") %>%
   filter(sentiment %in% c("positive", "negative")) %>%
   count(sentiment)
@@ -137,9 +147,13 @@ get_sentiments("nrc") %>%
 get_sentiments("bing") %>%
   count(sentiment)
 ```
-#Most common positive and negative words
+
+Both lexicons have more negative than positive words, but the ratio of negative to positive words is higher in the Bing lexicon than the NRC lexicon. This will contribute to the effect we see in the plot above, as will any systematic difference in word matches, e.g. if the negative words in the NRC lexicon do not match the words that Jane Austen uses very well. Whatever the source of these differences, we see similar relative trajectories across the narrative arc, with similar changes in slope, but marked differences in absolute sentiment from lexicon to lexicon. This is all important context to keep in mind when choosing a sentiment lexicon for analysis.
+
+# Most common positive and negative words -- One advantage of having the data frame with both sentiment and word is that we can analyze word counts that contribute to each sentiment
 
 ```{r}
+# How much each word contributed to each sentiment?
 bing_word_counts<-tidy_books %>%
   inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) %>%
@@ -147,7 +161,7 @@ bing_word_counts<-tidy_books %>%
 
 bing_word_counts
 
-#visualization
+# Show visually
 bing_word_counts %>%
   group_by(sentiment) %>%
   slice_max(n, n = 10) %>%
@@ -159,16 +173,19 @@ bing_word_counts %>%
   labs(x = "Contribution to sentiment",
        y = NULL)
 ```
+The plot above shows words that contribute to positive and negative sentiment in Eyre. 
 
-#Wordclouds
+# Wordclouds
 
 ```{r}
+## Wordclouds
 tidy_books %>%
   anti_join(stop_words) %>%
   count(word) %>%
   with(wordcloud(word, n, max.words = 100))
 
-#in other functions
+## Use 'comparison.cloud()' function -- turn the data frame into a matrix
+# Here I did the sentiment analysis to tag positive and negative words using an inner join, then find the most common positive and negative words.
 tidy_books %>%
   inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) %>%
@@ -177,8 +194,16 @@ tidy_books %>%
                    max.words = 100)
 ```
 
-#Task three
+The size of a word's text is in proportion to its frequency within its sentiment. We can use this visualization to see the most important positive and negative words. Here the most important positive word is 'positive' and the most important negative word is 'miss'.
+
+### Task three
+
+Truenumbers (TN) is a system for building data resources that are hosted on a server and accessed through clients that interact with with server through the Truenumbers API. The system uses natural language descriptions of data items and includes a tagging function for augmenting data items, defining subsets, and tracking process metadata. Following I would like to use TN to do analysis on Eyre book.
+
+## Download packages and the book
+
 ```{r}
+## Install the R tnum package 
 library(devtools)
 devtools::install_github("Truenumbers/tnum/tnum")
 
@@ -198,11 +223,12 @@ source("Book2TN-v3-hw.R")
 #tnBooksFromLines(jane_eyre_txt, "je")
 
 
-## not run: tnBooksFromLines(jane_eyre$text, "jane_eyre")
+## not run: tnBooksFromLines(jane_eyre$text, "jane_eyre") -- it took me a very long time
 
-tnum.getDBPathList(taxonomy = "subject", levels = 2)
+tnum.getDBPathList(taxonomy = "subject", levels = 2) # make sure the book be ingested properly
 ```
 
+Assign the return from 'tnum.query' function to a variable so that we can examine the list items in the environment. And then convert the TN list to a data frame (use the 'tnum.objectstoDF()' function) so that each TN is a row in the data frame.
 
 ```{r echo=TRUE, warning=FALSE, message=FALSE}
 q111 <- tnum.query(query = "jane_eyre# has ordinal", max=500)   ## everything
@@ -244,7 +270,9 @@ para_text4 <- df4 %>% pull(string.value) %>%
 # 
 ```
 
-# Use tnum in text analysis
+## Use tnum in text analysis
+
+In this part, I want to use TNs for text analysis. As I did before, loading the libraries I need, authorizing the server if needed and setting the number space to "test2". 
 
 ```{r}
 ##  The ordinal numbers for the entire book 
@@ -253,7 +281,7 @@ w10 <- tnum.query("jane_eyre# has ordinal", max=1800)
 wdf10 <- tnum.objectsToDf(w10)
 
 ## Examing the first 50 TNs  makes it easy to see the Table of Contents
-## and to see that object 22 is the heading at the start of Chapter 1
+## and to see that object 11 is the heading at the start of Chapter 1
 
 
 ## This shows the Table of Contents
@@ -278,22 +306,11 @@ chapter_locations <- left_join(select(wdf13, subject, string.value),
                                select(wdf14, subject, numeric.value)) 
 ## add column for chapter number
 library(magrittr)
-chapter_locations %<>% mutate(chapter=1:36)
+chapter_locations %<>% mutate(chapter=1:36) # because there are 36 chapters in total
 
 w15 <- tnum.query("jane_eyre/section:0011# has ordinal")
 wdf15 <- tnum.objectsToDf(w15)
 
-
-
-#a <- chapter_locations %>% filter(chapter==2) %>% 
-                           select(numeric.value) %>% 
-                           unlist()
-
-#a <- str_pad(as.character(a),4,side="left",pad="0")
-
-#b <- paste0("wells12/hw12/section:",a,"#", " has ordinal")
-
-#b
 
 
 ## chapter 1 para 1, word counts for the 3 sentences in para 1
@@ -320,41 +337,9 @@ length(ch2_txt_df$string.value)
 
 q21 <- tnum.query("jane_eyre/section:0011/paragraph:0001/# has *", max = 30)
 df21 <- tnum.objectsToDf(q21)
-
-
-####Before
-#Explore the TNs that contain Jane Eyre text
-## use query to check TNs
-q20<-tnum.query("jane_eyre# has *",max = 3)
-df20<-tnum.objectsToDf(q20)
-
-q24<-tnum.query("jane_eyre/heading# has *",max = 60)
-df24<-tnum.objectsToDf(q24)
-
-q11<-tnum.query("jane_eyre/heading:0011# has *")
-df11<-tnum.objectsToDf(q11)
-ord_ch1<-unlist(tnum.query("jane_eyre/heading:0011# has ordinal"))
-
-ord_ch2<-unlist(tnum.query("jane_eyre/heading:0012# has ordinal"))
-
-q25<-tnum.query("jane_eyre/heading:0012# has *")
-df25<-tnum.objectsToDf(q25)
-
-ch1_txt<-tnum.query("jane_eyre/section:0011/paragraph:0002/# has text", max = 30)
-ch1_txt_df<-tnum.objectsToDf(ch1_txt)
-ch1_txt_df$string.value
-
-ch2_txt<-tnum.query("jane_eyre/section:0011/paragraph:0002/sentence:# has *", max = 30)
-ch2_txt_df<-tnum.objectsToDf(ch2_txt)
-ch2_txt_df$string.value
-
-length(ch2_txt_df$string.value)
-
-q11<-tnum.query("jane_eyre/section:0011/paragraph:0001/# has *", max = 30)
-df11<-tnum.objectsToDf(q11)
 ```
 
-#Sentimentr
+## Sentimentr
 
 ```{r}
 library(sentimentr)
@@ -396,65 +381,48 @@ jane_1 %>%
 #Sense and Sensibility
 
 ```{r}
-#create tags
-tnum.tagByQuery("jane_eyre# has*= REGEXP(\"love\")",adds = ("ref:love"))
-
-tnum.tagByQuery("jane_eyre# has*=REGEXP(\"Jane|Rochester\")",adds = ("ref:JR"))
+#create tag
+qr2<-tnum.query("jane_eyre/# has*=REGEXP(\" Jane|Reed\")",max = 50)
+qr_df_2<-tnum.objectsToDf(qr2)
+tnum.tagByQuery("jane_eyre/# has*=REGEXP(\" Jane|Reed\")",adds = ("reference:jr"))
 
 #make plots(before making plots, I create a function to turn all the chapters into a vector)
-getsection<-function(query_t2){
-  n= length(query_t2)
-  sectionlist<-1:n
+getdf<-function(df){
+  n<-nrow(df)
+  vector<- rep(0,n)
+  subject<- df$subject
   for (i in 1:n) {
-    sectionlist[i]<-
-      as.character(substring(str_split(tnum.getAttrFromList(query_t2[i],"subject"), "/"), 4))
+   vector[i]<-
+      as.numeric(substring(str_split(subject[i], "/")[[1]][2], 9))
   }
-  return(sectionlist)
+  return(vector)
 }
+# Jane and Reed
 
-#love
-love<-tnum.query("@ref:love", max = 20)
-love_df<-tnum.objectsToDf(love)
-
-ggplot() + geom_bar(mapping = aes(getsection(love)), stat = "count")+
-  labs(x="Section", title = "Frequency of 'love'")
-
-#JR
-jr<-tnum.query("@ref:JR", max = 50)
-jr_df<-tnum.objectsToDf(jr)
-
-ggplot() + geom_bar(mapping = aes(getsection(jr)), stat = "count") +
-  labs(x="Section", title = "Frequency of Jane and Rochester")
+ggplot() + geom_bar(mapping = aes(getdf(qr_df_2)), stat = "count")+
+  labs(x="Section", title = "Frequency of 'Jane and Reed'")
 
 
 ```
 
-## Couples with love
+## Show virsually
 
 ```{r}
-lovejr<-tnum.query("@[ref:love,ref:JR]", max = 100)
-jrgraph<-tnum.graphTnumList(jr_df$subject)
+word_data<-data.frame(ch = getdf(qr_df_2),num = qr_df_2$numeric.value)
+
+word_data<-word_data %>%
+  group_by(ch) %>%
+  summarise(count = sum(num))
+
+ggplot(data = word_data, aes(x = as.factor(ch), y = count, group =1)) +
+  geom_line(color = "orange") +
+  geom_point() +
+  labs(x = "Chapter Number", y = "Number of Words")+
+  ggtitle("Word Count in Each Chapter")+
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(axis.text =  element_text(size = 7))
+
+jrgraph<-tnum.graphTnumList(qr_df_2$subject)
 tnum.plotGraph(jrgraph)
 ```
 
-
-
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
