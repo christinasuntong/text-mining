@@ -166,6 +166,8 @@ df21 <- tnum.objectsToDf(q21)
 
 ## Sentimentr
 
+Sentimentr is designed to quickly calculate text polarity sentiment in the English language at the sentence level and optionally aggregate by rows or grouping variable(s).
+
 ```{r, echo=FALSE}
 library(sentimentr)
 jane_1 <- get_sentences(para_text4)
