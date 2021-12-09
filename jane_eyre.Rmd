@@ -200,6 +200,7 @@ The size of a word's text is in proportion to its frequency within its sentiment
 
 Truenumbers (TN) is a system for building data resources that are hosted on a server and accessed through clients that interact with with server through the Truenumbers API. The system uses natural language descriptions of data items and includes a tagging function for augmenting data items, defining subsets, and tracking process metadata. Following I would like to use TN to do analysis on Eyre book.
 
+In this part, I used the tnum package to explore and tag text from the book Jane Eyre. I explored the frequency of words and characters throughout each section of the book, and created visualizations to show these frequencies. The process is described in more detail below.
 ## Download packages and the book
 
 ```{r}
@@ -345,32 +346,29 @@ df21 <- tnum.objectsToDf(q21)
 library(sentimentr)
 jane_1 <- get_sentences(para_text4)
 
-## to get sentiment scores by sentence
-sentiment(jane_1)
+## Get sentiment scores by sentence
+sentiment(jane_1) # The sentiment scores here are all zero.
 
-## to get sentiment scores aggregated by paragraph
+## Get sentiment scores aggregated by paragraph
 sentiment_by(jane_1)
 
 emotion(jane_1)
-profanity(jane_1)
 
+## Rename the data to 'jan_senti' after getting sentences from original book
 jan<-tidy_books
 jan %>%
   get_sentences() %>%
   sentiment() -> jan_senti
-
+## See the density plot of sentiment
 jan_senti %>%
   ggplot() + geom_density(aes(sentiment))
-
-jan_senti %>%
-  ggplot() + geom_boxplot(aes(x = linenumber, y = sentiment))
-
+## Mutate 'polarity_level' to see differences between positive and negative
 jan_senti %>%
   mutate(polarity_level = ifelse(sentiment > 0, "Positive", "Negative")) %>%
   count(linenumber, polarity_level) %>%
   ggplot() + geom_col(aes(y = linenumber, x = n, fill = polarity_level)) +
   theme_minimal()
-
+## With 'highlight' function
 jane_1 %>%
   get_sentences() %>%
   sentiment_by() %>%
@@ -378,37 +376,55 @@ jane_1 %>%
 
 ```
 
-#Sense and Sensibility
+From the density plot, we can see most of the sentiments are zero. For the plot with 'polarity_level', each linenumber has different number of positive and negative sentiments.
+
+## Extra attempts: tag
+
+From the content, I would like to analysis the relationship between Jane and her uncle, Reed. Firstly I create a tag to 'Jane|Reed' in order to find where they comes out together in this book.
 
 ```{r}
-#create tag
-qr2<-tnum.query("jane_eyre/# has*=REGEXP(\" Jane|Reed\")",max = 50)
+# Create tag
+qr2<-tnum.query("jane_eyre/# has*=REGEXP(\" Jane|Reed\")",max = 50) # there are 156 results in this book.
 qr_df_2<-tnum.objectsToDf(qr2)
-tnum.tagByQuery("jane_eyre/# has*=REGEXP(\" Jane|Reed\")",adds = ("reference:jr"))
+tnum.tagByQuery("jane_eyre/# has*=REGEXP(\" Jane|Reed\")",adds = ("reference:jr")) # create the tag and give it a reference at the same time
 
-#make plots(before making plots, I create a function to turn all the chapters into a vector)
+# Make plots(before making plots, I create a function to turn all the chapters into a vector)
 getdf<-function(df){
   n<-nrow(df)
   vector<- rep(0,n)
   subject<- df$subject
   for (i in 1:n) {
    vector[i]<-
-      as.numeric(substring(str_split(subject[i], "/")[[1]][2], 9))
+      as.numeric(substring(str_split(subject[i], "/")[[1]][2], 9)) # section comes out at the second location in the split subject
   }
   return(vector)
 }
 # Jane and Reed
-
 ggplot() + geom_bar(mapping = aes(getdf(qr_df_2)), stat = "count")+
   labs(x="Section", title = "Frequency of 'Jane and Reed'")
 
-
 ```
+
+From the plot above, it shows that 'Jane and Reed' comes out together in several sections. The most important part is in the earlier part of the book, which makes sense. This fits the story that the book tells -- her uncle, Reed, raises Jane when she was a child.
 
 ## Show virsually
 
 ```{r}
-word_data<-data.frame(ch = getdf(qr_df_2),num = qr_df_2$numeric.value)
+# Create a function for paragraph number
+para_num_df<-function(df){
+  n<-nrow(df)
+  vector<-rep(0,n)
+  subject<-df$subject
+  for(i in 1:n){
+    vector[i]<-as.numeric(substring(str_split(subject[i],"/")[[1]][3],11))
+  }
+  return(vector)
+}
+
+num1<-tnum.query("jane_eyre# has count:word", max = 1500)
+num1_df<-tnum.objectsToDf(num1)
+
+word_data<-data.frame(ch = getdf(num1_df),para =para_num_df(num1_df), num = num1_df$numeric.value)
 
 word_data<-word_data %>%
   group_by(ch) %>%
@@ -421,8 +437,37 @@ ggplot(data = word_data, aes(x = as.factor(ch), y = count, group =1)) +
   ggtitle("Word Count in Each Chapter")+
   theme(plot.title = element_text(hjust = 0.5)) +
   theme(axis.text =  element_text(size = 7))
+## Create functions for query
+# For section number
+ch_num<-function(query){
+  n<-length(query)
+  vector<-rep(0,n)
+  for(i in 1:n){
+    vector[i]<-as.numeric(substring(str_split(tnum.getAttrFromList(query[i],"subject"), "/")[[1]][2],9))
+  }
+  return(vector)
+}
+# For paragraph number
+para_num<-function(query){
+  n<-length(query)
+  vector<-rep(0,n)
+  for(i in 1:n){
+    vector[i]<-as.numeric(substring(str_split(tnum.getAttrFromList(query[i],"subject"), "/")[[1]][3],11))
+  }
+  return(vector)
+}
 
+# Histogram of Occurances of the Word Jane|Reed
+jr_data<-data.frame(ch = ch_num(qr2), para = para_num(qr2))
+ggplot(jr_data, aes(ch)) +
+  geom_histogram(aes(fill = as.factor(para)), binwidth = 1) +
+  labs(title = "Distribution of The Word Jane|Reed") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(fill = "Paragraph Number") +
+  xlab("Section Number")
+# Show relationship
 jrgraph<-tnum.graphTnumList(qr_df_2$subject)
-tnum.plotGraph(jrgraph)
+jrgraph
+# Not work well: tnum.plotGraph(jrgraph)
 ```
-
+This part I would like to show the relationship between Jane and Reed, but I cannot use the function such as 'tnum.plotGraph()' in the file you showed us in class. There is an error saying these functions do not exist. What I can do is drawing a plot showing the distribution of the Word 'Jane|Reed' occurances. I will work on the part that does not go well in the future.
