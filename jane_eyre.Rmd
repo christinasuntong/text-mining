@@ -2,10 +2,11 @@
 title: "text mining"
 author: "Christina"
 date: "11/29/2021"
-output: html_document
+output: pdf_document
+always_allow_html: true
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, echo=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(tidytext)
@@ -16,11 +17,12 @@ library(ggplot2)
 library(gutenbergr)
 library(wordcloud)
 library(reshape2)
+# options(warn = -1)
 ```
 
 # Download and Tidy
 
-```{r}
+```{r, echo=FALSE}
 ## Download the book from gutenberg
 jane <- gutenberg_download(1260)
 ## Annotate a 'linenumber' quantity to keep track of lines in the original format and a 'chapter'(with a regex) to find where all the chapters are
@@ -65,7 +67,7 @@ tidy_books %>%
 
 In the previous part, I explored what changed the original book into the tidy text format and showed how this format can be used to approach questions about word frequency. Next I would like to address the topic of sentiment analysis. When human readers approach a text, we use our understanding of the emotional intent of words to infer whether a section of text is positive or negative. So here I use the tools of text mining to appraoch the emotional content of text.
 
-```{r}
+```{r, echo=FALSE}
 ## Sentiment analysis with inner join
 # Look at the words with a joy score from the NRC lexicon
 nrc_joy<-get_sentiments("nrc") %>%
@@ -82,7 +84,7 @@ I found that mostly positive, happy words about love, hope and happy here.
 
 In addition, I want to examine how sentiment changes throughout each novel. First, I find a sentiment score for each word using the Bing lexicon and 'inner_join()'. Next I count up how many positive and negative words there are in defined sections of the book and define an "index" here to keep track of where we are in the narrative; this index (using integer division) counts up sections of 60 lines of text. In addition, I use 'pivot_wider()' so that we can have negative and positive sentiment in separate columns and finally calculate a net sentiment (positive - negative).
 
-```{r}
+```{r, echo=FALSE}
 # Calculate negative and positive sentiment
 jane_sentiment<-tidy_books %>%
   inner_join(get_sentiments("bing")) %>%
@@ -103,7 +105,7 @@ We can see how the plot of each novel changes toward more positive or negative s
  - Bing: the Bing lexicon categorizes words in a binary fashion into positive and negative categories;
  - nrc: the nrc lexicon categorizes words in a binary fashion ("yes"/"no") into categories of positive, negative, anger, anticipation, disgust, fear, joy, sadness, surprise and trust.
 
-```{r}
+```{r, echo=FALSE}
 # AFINN
 afinn<-tidy_books %>%
   inner_join(get_sentiments("afinn")) %>%
@@ -137,7 +139,7 @@ bind_rows(afinn,
 
 The three different lexicons for calculating sentiment give results that are different in an absolute sense but have similar relative trajectories through the novel. We can see similar dips and peaks in sentiment at about the same places in the novel, but the absolute values are significantly different. The AFINN lexicon gives the largest absolute values, with high positive values. The Bing lexicon has lower absolute values. The NRC lexicon are shifted higher realtive to the other two, labeling the text more positively.
 
-```{r}
+```{r, echo=FALSE}
 ## Why the result for the NRC lexicon biased so high in sentiment compared to the Bing result?
 # How many positive and negative words are in these lexicons?
 get_sentiments("nrc") %>%
@@ -152,7 +154,7 @@ Both lexicons have more negative than positive words, but the ratio of negative 
 
 # Most common positive and negative words -- One advantage of having the data frame with both sentiment and word is that we can analyze word counts that contribute to each sentiment
 
-```{r}
+```{r, echo=FALSE}
 # How much each word contributed to each sentiment?
 bing_word_counts<-tidy_books %>%
   inner_join(get_sentiments("bing")) %>%
@@ -177,7 +179,7 @@ The plot above shows words that contribute to positive and negative sentiment in
 
 # Wordclouds
 
-```{r}
+```{r, echo=FALSE}
 ## Wordclouds
 tidy_books %>%
   anti_join(stop_words) %>%
@@ -203,7 +205,7 @@ Truenumbers (TN) is a system for building data resources that are hosted on a se
 In this part, I used the tnum package to explore and tag text from the book Jane Eyre. I explored the frequency of words and characters throughout each section of the book, and created visualizations to show these frequencies. The process is described in more detail below.
 ## Download packages and the book
 
-```{r}
+```{r, include=FALSE}
 ## Install the R tnum package 
 library(devtools)
 devtools::install_github("Truenumbers/tnum/tnum")
@@ -219,7 +221,7 @@ tnum.setSpace("test2")
 
 #jane_eyre<-gutenberg_download(gutenberg_id = 1260)  ## download Jane Eyre
 jane_eyre_txt<-readLines("jane.txt")
-source("Book2TN-v3-hw.R")
+source("Book2TN-v3-hw.R", echo = TRUE)
 
 #tnBooksFromLines(jane_eyre_txt, "je")
 
@@ -231,7 +233,7 @@ tnum.getDBPathList(taxonomy = "subject", levels = 2) # make sure the book be ing
 
 Assign the return from 'tnum.query' function to a variable so that we can examine the list items in the environment. And then convert the TN list to a data frame (use the 'tnum.objectstoDF()' function) so that each TN is a row in the data frame.
 
-```{r echo=TRUE, warning=FALSE, message=FALSE}
+```{r, echo=FALSE}
 q111 <- tnum.query(query = "jane_eyre# has ordinal", max=500)   ## everything
 df111 <- tnum.objectsToDf(q111)
 
@@ -275,7 +277,7 @@ para_text4 <- df4 %>% pull(string.value) %>%
 
 In this part, I want to use TNs for text analysis. As I did before, loading the libraries I need, authorizing the server if needed and setting the number space to "test2". 
 
-```{r}
+```{r, echo=FALSE}
 ##  The ordinal numbers for the entire book 
 ##  show the sequence of objects in order of their appearance.
 w10 <- tnum.query("jane_eyre# has ordinal", max=1800)
@@ -342,7 +344,7 @@ df21 <- tnum.objectsToDf(q21)
 
 ## Sentimentr
 
-```{r}
+```{r, echo=FALSE}
 library(sentimentr)
 jane_1 <- get_sentences(para_text4)
 
@@ -368,11 +370,6 @@ jan_senti %>%
   count(linenumber, polarity_level) %>%
   ggplot() + geom_col(aes(y = linenumber, x = n, fill = polarity_level)) +
   theme_minimal()
-## With 'highlight' function
-jane_1 %>%
-  get_sentences() %>%
-  sentiment_by() %>%
-  highlight()
 
 ```
 
@@ -382,7 +379,7 @@ From the density plot, we can see most of the sentiments are zero. For the plot 
 
 From the content, I would like to analysis the relationship between Jane and her uncle, Reed. Firstly I create a tag to 'Jane|Reed' in order to find where they comes out together in this book.
 
-```{r}
+```{r, echo=FALSE}
 # Create tag
 qr2<-tnum.query("jane_eyre/# has*=REGEXP(\" Jane|Reed\")",max = 50) # there are 156 results in this book.
 qr_df_2<-tnum.objectsToDf(qr2)
@@ -409,7 +406,7 @@ From the plot above, it shows that 'Jane and Reed' comes out together in several
 
 ## Show virsually
 
-```{r}
+```{r, echo=FALSE}
 # Create a function for paragraph number
 para_num_df<-function(df){
   n<-nrow(df)
