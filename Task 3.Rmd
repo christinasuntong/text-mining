@@ -1,0 +1,291 @@
+---
+title: "text mining"
+author: "Tong Sun"
+date: "12/1/2021"
+output: pdf_document
+always_allow_html: true
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidytext)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(gutenbergr)
+library(wordcloud)
+library(reshape2)
+# options(warn = -1)
+```
+
+### Task three
+
+Truenumbers (TN) is a system for building data resources that are hosted on a server and accessed through clients that interact with with server through the Truenumbers API. The system uses natural language descriptions of data items and includes a tagging function for augmenting data items, defining subsets, and tracking process metadata. Following I would like to use TN to do analysis on Eyre book.
+
+In this part, I used the tnum package to explore and tag text from the book Jane Eyre. I explored the frequency of words and characters throughout each section of the book, and created visualizations to show these frequencies. The process is described in more detail below.
+## Download packages and the book
+
+```{r, include=FALSE}
+## Install the R tnum package 
+library(devtools)
+devtools::install_github("Truenumbers/tnum/tnum")
+
+#'tnum' package
+library(knitr)
+library(gutenbergr)
+library(tidyverse)
+library(tnum)
+
+tnum.authorize("mssp1.bu.edu")
+tnum.setSpace("test2")
+
+#jane_eyre<-gutenberg_download(gutenberg_id = 1260)  ## download Jane Eyre
+jane_eyre_txt<-readLines("jane.txt")
+source("Book2TN-v3-hw.R", echo = TRUE)
+
+#tnBooksFromLines(jane_eyre_txt, "je")
+
+
+## not run: tnBooksFromLines(jane_eyre$text, "jane_eyre") -- it took me a very long time
+
+tnum.getDBPathList(taxonomy = "subject", levels = 2) # make sure the book be ingested properly
+```
+
+Assign the return from 'tnum.query' function to a variable so that we can examine the list items in the environment. And then convert the TN list to a data frame (use the 'tnum.objectstoDF()' function) so that each TN is a row in the data frame.
+
+```{r, echo=FALSE}
+q111 <- tnum.query(query = "jane_eyre# has ordinal", max=500)   ## everything
+df111 <- tnum.objectsToDf(q111)
+
+## show ordered objects in document
+q112 <- tnum.query("jane_eyre# has ordinal")   ## show ordered objects in document
+df112 <- tnum.objectsToDf(q112)
+
+## focus on one paragraph -- note the word count for each sentence
+q3 <- tnum.query("jane_eyre/section:0001/paragraph:0005# has count#")  # just 1 para
+df3 <- tnum.objectsToDf(q3) %>% filter(date == "2021-12-03")
+df3
+
+
+## and now look at the text in a sentence
+q1 <- tnum.query("jane_eyre/section:0001/paragraph:0005/sentence:0002# has text")
+df1 <- tnum.objectsToDf(q1) %>% filter(date == "2021-12-03")
+df1
+
+## To extract a paragraph of text
+q4 <- tnum.query("jane_eyre/section:0001/paragraph:0005/sentence# has text", max = 10)
+df4 <- tnum.objectsToDf(q4) %>% filter(date == "2021-12-03")
+para_text4 <- df4 %>% pull(string.value) %>% 
+                      str_replace_all("\"","") %>% 
+                      str_flatten(collapse = " ")
+
+## steps to understand
+# a <- para_text4[1]
+# a
+# 
+# b <- str_replace_all(a,"\"","")   
+# b
+# 
+# c <- para_text4
+# c
+# 
+# c <- str_replace_all(a,"\"","")  
+# 
+```
+
+## Use tnum in text analysis
+
+In this part, I want to use TNs for text analysis. As I did before, loading the libraries I need, authorizing the server if needed and setting the number space to "test2"
+
+```{r, echo=FALSE}
+##  The ordinal numbers for the entire book 
+##  show the sequence of objects in order of their appearance.
+w10 <- tnum.query("jane_eyre# has ordinal", max=1800)
+wdf10 <- tnum.objectsToDf(w10)
+
+## Examing the first 50 TNs  makes it easy to see the Table of Contents
+## and to see that object 11 is the heading at the start of Chapter 1
+
+
+## This shows the Table of Contents
+w11 <- tnum.query("jane_eyre# has text", start = 3 ,max=18)
+wdf11 <- tnum.objectsToDf((w11))
+
+table_of_contents <- wdf11 %>% select(string.value) 
+
+
+## Look at just the headings shows the structure of the book
+w13 <- tnum.query("jane_eyre/heading# has text", max=40)
+wdf13 <- tnum.objectsToDf(w13)
+
+
+## It may look like the table of contents is repeated twice,
+## but examing the ordinals produces chapter list that includes the 
+## ordinal location for the heading of each chapter
+w14 <- tnum.query("jane_eyre/heading# has ordinal", max=40)
+wdf14 <- tnum.objectsToDf(w14)
+
+chapter_locations <- left_join(select(wdf13, subject, string.value), 
+                               select(wdf14, subject, numeric.value)) 
+## add column for chapter number
+library(magrittr)
+chapter_locations %<>% mutate(chapter=1:36) # because there are 36 chapters in total
+
+w15 <- tnum.query("jane_eyre/section:0011# has ordinal")
+wdf15 <- tnum.objectsToDf(w15)
+
+
+
+## chapter 1 para 1, word counts for the 3 sentences in para 1
+q20 <- tnum.query("jane_eyre# has *", max=3)
+df20 <- tnum.objectsToDf(q20)
+
+#  chapter locations  ordinal numbers
+ord_ch1 <- unlist(tnum.query("jane_eyre/heading:0011# has ordinal"))
+ord_ch2 <- unlist(tnum.query("jane_eyre/heading:0012# has ordinal"))
+
+
+ch1_txt <- tnum.query("jane_eyre/section:0011/paragraph:0002/# has text", max=30)
+
+ch1_txt_df <- tnum.objectsToDf(ch1_txt)
+ch1_txt_df$string.value
+
+ch2_txt <- tnum.query("jane_eyre/section:0011/paragraph:0002/sentence:# has *", max=30)
+ch2_txt_df <- tnum.objectsToDf(ch2_txt)
+
+ch2_txt_df$string.value
+
+length(ch2_txt_df$string.value)
+
+
+q21 <- tnum.query("jane_eyre/section:0011/paragraph:0001/# has *", max = 30)
+df21 <- tnum.objectsToDf(q21)
+```
+
+## Sentimentr
+
+```{r, echo=FALSE}
+library(sentimentr)
+jane_1 <- get_sentences(para_text4)
+
+## Get sentiment scores by sentence
+sentiment(jane_1) # The sentiment scores here are all zero.
+
+## Get sentiment scores aggregated by paragraph
+sentiment_by(jane_1)
+
+emotion(jane_1)
+
+## Rename the data to 'jan_senti' after getting sentences from original book
+jan<-tidy_books
+jan %>%
+  get_sentences() %>%
+  sentiment() -> jan_senti
+## See the density plot of sentiment
+jan_senti %>%
+  ggplot() + geom_density(aes(sentiment))
+## Mutate 'polarity_level' to see differences between positive and negative
+jan_senti %>%
+  mutate(polarity_level = ifelse(sentiment > 0, "Positive", "Negative")) %>%
+  count(linenumber, polarity_level) %>%
+  ggplot() + geom_col(aes(y = linenumber, x = n, fill = polarity_level)) +
+  theme_minimal()
+```
+
+From the density plot, we can see most of the sentiments are zero. For the plot with 'polarity_level', each linenumber has different number of positive and negative sentiments.
+
+## Extra attempts: tag
+
+From the content, I would like to analysis the relationship between Jane and her uncle, Reed. Firstly I create a tag to 'Jane|Reed' in order to find where they comes out together in this book.
+
+```{r, echo=FALSE}
+# Create tag
+qr2<-tnum.query("jane_eyre/# has*=REGEXP(\" Jane|Reed\")",max = 50) # there are 156 results in this book.
+qr_df_2<-tnum.objectsToDf(qr2)
+tnum.tagByQuery("jane_eyre/# has*=REGEXP(\" Jane|Reed\")",adds = ("reference:jr")) # create the tag and give it a reference at the same time
+
+# Make plots(before making plots, I create a function to turn all the chapters into a vector)
+getdf<-function(df){
+  n<-nrow(df)
+  vector<- rep(0,n)
+  subject<- df$subject
+  for (i in 1:n) {
+   vector[i]<-
+      as.numeric(substring(str_split(subject[i], "/")[[1]][2], 9)) # section comes out at the second location in the split subject
+  }
+  return(vector)
+}
+# Jane and Reed
+ggplot() + geom_bar(mapping = aes(getdf(qr_df_2)), stat = "count")+
+  labs(x="Section", title = "Frequency of 'Jane and Reed'")
+```
+
+From the plot above, it shows that 'Jane and Reed' comes out together in several sections. The most important part is in the earlier part of the book, which makes sense. This fits the story that the book tells -- her uncle, Reed, raises Jane when she was a child.
+
+## Show virsually
+
+```{r, echo=FALSE}
+# Create a function for paragraph number
+para_num_df<-function(df){
+  n<-nrow(df)
+  vector<-rep(0,n)
+  subject<-df$subject
+  for(i in 1:n){
+    vector[i]<-as.numeric(substring(str_split(subject[i],"/")[[1]][3],11))
+  }
+  return(vector)
+}
+
+num1<-tnum.query("jane_eyre# has count:word", max = 1500)
+num1_df<-tnum.objectsToDf(num1)
+
+word_data<-data.frame(ch = getdf(num1_df),para =para_num_df(num1_df), num = num1_df$numeric.value)
+
+word_data<-word_data %>%
+  group_by(ch) %>%
+  summarise(count = sum(num))
+
+ggplot(data = word_data, aes(x = as.factor(ch), y = count, group =1)) +
+  geom_line(color = "orange") +
+  geom_point() +
+  labs(x = "Chapter Number", y = "Number of Words")+
+  ggtitle("Word Count in Each Chapter")+
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(axis.text =  element_text(size = 7))
+## Create functions for query
+# For section number
+ch_num<-function(query){
+  n<-length(query)
+  vector<-rep(0,n)
+  for(i in 1:n){
+    vector[i]<-as.numeric(substring(str_split(tnum.getAttrFromList(query[i],"subject"), "/")[[1]][2],9))
+  }
+  return(vector)
+}
+# For paragraph number
+para_num<-function(query){
+  n<-length(query)
+  vector<-rep(0,n)
+  for(i in 1:n){
+    vector[i]<-as.numeric(substring(str_split(tnum.getAttrFromList(query[i],"subject"), "/")[[1]][3],11))
+  }
+  return(vector)
+}
+
+# Histogram of Occurances of the Word Jane|Reed
+jr_data<-data.frame(ch = ch_num(qr2), para = para_num(qr2))
+ggplot(jr_data, aes(ch)) +
+  geom_histogram(aes(fill = as.factor(para)), binwidth = 1) +
+  labs(title = "Distribution of The Word Jane|Reed") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(fill = "Paragraph Number") +
+  xlab("Section Number")
+# Show relationship
+jrgraph<-tnum.graphTnumList(qr_df_2$subject)
+jrgraph
+# Not work well: tnum.plotGraph(jrgraph)
+```
+
+This part I would like to show the relationship between Jane and Reed, but I cannot use the function such as 'tnum.plotGraph()' in the file you showed us in class. There is an error saying these functions do not exist. What I can do is drawing a plot showing the distribution of the Word 'Jane|Reed' occurances. I will work on the part that does not go well in the future.
