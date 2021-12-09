@@ -1,0 +1,204 @@
+---
+title: "text mining"
+author: "Tong Sun"
+date: "11/29/2021"
+output: pdf_document
+always_allow_html: true
+---
+
+# Task one and two
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidytext)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(gutenbergr)
+library(wordcloud)
+library(reshape2)
+# options(warn = -1)
+```
+
+## Download and Tidy
+
+Jane Eyre is divided into 38 chapters. It was originally published in three volumes in the 19th century, comprising chapters 1 to 15, 16 to 27, and 28 to 38. The novel is a first-person narrative from the perspective of the title character. It has five distinct stages: Jane's childhood at Gateshead Hall, where she is emotionally and physically abused by her aunt and cousins; her education at Lowood School, where she gains friends and role models but suffers privations and oppression; her time as governess at Thornfield Hall, where she falls in love with her mysterious employer, Edward Fairfax Rochester; her time in the Moor House, during which her earnest but cold clergyman cousin, St. John Rivers, proposes to her; and ultimately her reunion with, and marriage to, her beloved Rochester. Throughout these sections, it provides perspectives on a number of important social issues and ideas, many of which are critical of the status quo.
+
+```{r, echo=FALSE}
+## Download the book from gutenberg
+jane <- gutenberg_download(1260)
+## Annotate a 'linenumber' quantity to keep track of lines in the original format and a 'chapter'(with a regex) to find where all the chapters are
+original_books <-jane %>%
+  mutate(
+    linenumber = row_number(),
+    chapter = cumsum(str_detect(text, 
+                                regex("^chapter [\\divxlc]", 
+                                      ignore_case = TRUE)))) %>%
+  unnest_tokens(word, text)
+
+original_books
+## Restructure into the one-token-per-row format with 'unnest_tokens()' function. Here the tokenizing is for words
+tidy_books<-original_books %>%
+  unnest_tokens(word, word)
+
+length(unique(tidy_books$chapter))
+count(tidy_books, chapter) # In this book, there are 39 chapters in it
+## Manipulate with tidy tools
+
+# Remove stop words -- remove stop words(kept in the tidytext dataset 'stop_words') with 'anti_join()'
+data("stop_words")
+
+tidy_books<-tidy_books %>%
+  anti_join(stop_words) #'stop_words' dataset in the tidytext package contains stop words from three lexicons -- "AFINN", "bing","nrc"
+  
+# Find the most common words with dplyr's 'count()'
+tidy_books %>%
+  count(word, sort = TRUE) # The word counts are stored in a tidy data frame, allowing us to pipe this directly to the ggplot2 package
+
+# Visualization of the most common words
+tidy_books %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 200) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word)) +
+  geom_col() +
+  labs(y = NULL) # Here I filter the number of words > 200 in this book and we can see the most common word is jane.
+```
+
+## Sentiment analysis with tidy data
+
+In the previous part, I explored what changed the original book into the tidy text format and showed how this format can be used to approach questions about word frequency. Next I would like to address the topic of sentiment analysis. When human readers approach a text, we use our understanding of the emotional intent of words to infer whether a section of text is positive or negative. So here I use the tools of text mining to appraoch the emotional content of text.
+
+```{r, echo=FALSE}
+## Sentiment analysis with inner join
+# Look at the words with a joy score from the NRC lexicon
+nrc_joy<-get_sentiments("nrc") %>%
+  filter(sentiment == "joy") # Choose the name 'word' for the output column from 'unnest_tokens()' and filter for the joy words
+
+# What are the most common joy words in Jane Eyre
+tidy_books %>%
+  inner_join(nrc_joy) %>%
+  count(word, sort = TRUE) 
+
+```
+
+I found that mostly positive, happy words about love, hope and happy here.
+
+In addition, I want to examine how sentiment changes throughout each novel. First, I find a sentiment score for each word using the Bing lexicon and 'inner_join()'. Next I count up how many positive and negative words there are in defined sections of the book and define an "index" here to keep track of where we are in the narrative; this index (using integer division) counts up sections of 60 lines of text. In addition, I use 'pivot_wider()' so that we can have negative and positive sentiment in separate columns and finally calculate a net sentiment (positive - negative).
+
+```{r, echo=FALSE}
+# Calculate negative and positive sentiment
+jane_sentiment<-tidy_books %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(index = linenumber %/% 60, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+# Plot sentiment scores
+ggplot(jane_sentiment,aes(index, sentiment,)) +
+  geom_col(show.legend = FALSE) 
+  # Notice that here I'm plotting against the 'index' on the x-axis that keeps track of narrative time in sections of text.
+```
+
+We can see how the plot of each novel changes toward more positive or negative sentiment over the trajectory of the story. From the plot above, I find that there are more negative sentiments during the early index and more positive sentiments during the late index. I think this fits the story. During Eyre's childhood, she was abuted by her aunt,Sarah Reed, she did not have a happy childhood in her early years. Therefore the sentiment is negative. But when she met Rochester as written in the late plots, she was married with him and had a sweet life. So there are more positive ones here.
+
+## Compare the three sentiment dictionaries
+ - AFINN: the AFINN lexicon measures sentiment with a numeric score between -5 and 5;
+ - Bing: the Bing lexicon categorizes words in a binary fashion into positive and negative categories;
+ - nrc: the nrc lexicon categorizes words in a binary fashion ("yes"/"no") into categories of positive, negative, anger, anticipation, disgust, fear, joy, sadness, surprise and trust.
+
+```{r, echo=FALSE}
+# AFINN
+afinn<-tidy_books %>%
+  inner_join(get_sentiments("afinn")) %>%
+  group_by(index = linenumber %/% 60) %>%
+  summarise(sentiment = sum(value)) %>%
+  mutate(method = "AFINN")
+# Bing
+bing_and_nrc<-bind_rows(
+  tidy_books %>%
+    inner_join(get_sentiments("bing")) %>%
+    mutate(method = "Bing at al."),
+  tidy_books %>%
+    inner_join(get_sentiments("nrc") %>%
+                 filter(sentiment %in% c("positive","negative"))
+               ) %>%
+    mutate(method = "NRC")) %>%
+  count(method, index = linenumber %/% 60, sentiment) %>%
+  pivot_wider(names_from = sentiment,
+              values_from = n,
+              values_fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+# Visualize
+bind_rows(afinn,
+          bing_and_nrc) %>%
+  ggplot(aes(index, sentiment, fill = method)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~method, ncol = 1, scales = "free_y")
+
+```
+
+The three different lexicons for calculating sentiment give results that are different in an absolute sense but have similar relative trajectories through the novel. We can see similar dips and peaks in sentiment at about the same places in the novel, but the absolute values are significantly different. The AFINN lexicon gives the largest absolute values, with high positive values. The Bing lexicon has lower absolute values. The NRC lexicon are shifted higher realtive to the other two, labeling the text more positively.
+
+```{r, echo=FALSE}
+## Why the result for the NRC lexicon biased so high in sentiment compared to the Bing result?
+# How many positive and negative words are in these lexicons?
+get_sentiments("nrc") %>%
+  filter(sentiment %in% c("positive", "negative")) %>%
+  count(sentiment)
+
+get_sentiments("bing") %>%
+  count(sentiment)
+```
+
+Both lexicons have more negative than positive words, but the ratio of negative to positive words is higher in the Bing lexicon than the NRC lexicon. This will contribute to the effect we see in the plot above, as will any systematic difference in word matches, e.g. if the negative words in the NRC lexicon do not match the words that Jane Austen uses very well. Whatever the source of these differences, we see similar relative trajectories across the narrative arc, with similar changes in slope, but marked differences in absolute sentiment from lexicon to lexicon. This is all important context to keep in mind when choosing a sentiment lexicon for analysis.
+
+## Most common positive and negative words -- One advantage of having the data frame with both sentiment and word is that we can analyze word counts that contribute to each sentiment
+
+```{r, echo=FALSE}
+# How much each word contributed to each sentiment?
+bing_word_counts<-tidy_books %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+bing_word_counts
+
+# Show visually
+bing_word_counts %>%
+  group_by(sentiment) %>%
+  slice_max(n, n = 10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(x = "Contribution to sentiment",
+       y = NULL)
+```
+The plot above shows words that contribute to positive and negative sentiment in Eyre. 
+
+## Wordclouds
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+## Wordclouds
+tidy_books %>%
+  anti_join(stop_words) %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 100))
+
+## Use 'comparison.cloud()' function -- turn the data frame into a matrix
+# Here I did the sentiment analysis to tag positive and negative words using an inner join, then find the most common positive and negative words.
+tidy_books %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("gray20", "gray80"),
+                   max.words = 100)
+```
+
+The size of a word's text is in proportion to its frequency within its sentiment. We can use this visualization to see the most important positive and negative words. Here the most important positive word is 'positive' and the most important negative word is 'miss'.
+
