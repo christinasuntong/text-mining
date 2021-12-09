@@ -20,6 +20,26 @@ library(reshape2)
 # options(warn = -1)
 ```
 
+Firstly, I would like to tidy the data.Annotate a 'linenumber' quantity to keep track of lines in the original format and a 'chapter'(with a regex) to find where all the chapters are.
+
+```{r, echo=FALSE}
+## Download the book from gutenberg
+jane <- gutenberg_download(1260)
+original_books <-jane %>%
+  mutate(
+    linenumber = row_number(),
+    chapter = cumsum(str_detect(text, 
+                                regex("^chapter [\\divxlc]", 
+                                      ignore_case = TRUE)))) %>%
+  unnest_tokens(word, text)
+
+original_books
+## Restructure into the one-token-per-row format with 'unnest_tokens()' function. Here the tokenizing is for words
+tidy_books<-original_books %>%
+  unnest_tokens(word, word)
+```
+
+
 ### Task three
 
 Truenumbers (TN) is a system for building data resources that are hosted on a server and accessed through clients that interact with with server through the Truenumbers API. The system uses natural language descriptions of data items and includes a tagging function for augmenting data items, defining subsets, and tracking process metadata. Following I would like to use TN to do analysis on Eyre book.
@@ -27,7 +47,7 @@ Truenumbers (TN) is a system for building data resources that are hosted on a se
 In this part, I used the tnum package to explore and tag text from the book Jane Eyre. I explored the frequency of words and characters throughout each section of the book, and created visualizations to show these frequencies. The process is described in more detail below.
 ## Download packages and the book
 
-```{r, include=FALSE}
+```{r, include=FALSE, echo=FALSE}
 ## Install the R tnum package 
 library(devtools)
 devtools::install_github("Truenumbers/tnum/tnum")
@@ -66,13 +86,12 @@ df112 <- tnum.objectsToDf(q112)
 ## focus on one paragraph -- note the word count for each sentence
 q3 <- tnum.query("jane_eyre/section:0001/paragraph:0005# has count#")  # just 1 para
 df3 <- tnum.objectsToDf(q3) %>% filter(date == "2021-12-03")
-df3
 
 
 ## and now look at the text in a sentence
 q1 <- tnum.query("jane_eyre/section:0001/paragraph:0005/sentence:0002# has text")
 df1 <- tnum.objectsToDf(q1) %>% filter(date == "2021-12-03")
-df1
+
 
 ## To extract a paragraph of text
 q4 <- tnum.query("jane_eyre/section:0001/paragraph:0005/sentence# has text", max = 10)
@@ -168,17 +187,17 @@ df21 <- tnum.objectsToDf(q21)
 
 Sentimentr is designed to quickly calculate text polarity sentiment in the English language at the sentence level and optionally aggregate by rows or grouping variable(s).
 
-```{r, echo=FALSE}
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
 library(sentimentr)
 jane_1 <- get_sentences(para_text4)
 
 ## Get sentiment scores by sentence
-sentiment(jane_1) # The sentiment scores here are all zero.
+a<-sentiment(jane_1) # The sentiment scores here are all zero.
 
 ## Get sentiment scores aggregated by paragraph
-sentiment_by(jane_1)
+b<-sentiment_by(jane_1)
 
-emotion(jane_1)
+c<-emotion(jane_1)
 
 ## Rename the data to 'jan_senti' after getting sentences from original book
 jan<-tidy_books
@@ -286,7 +305,6 @@ ggplot(jr_data, aes(ch)) +
   xlab("Section Number")
 # Show relationship
 jrgraph<-tnum.graphTnumList(qr_df_2$subject)
-jrgraph
 # Not work well: tnum.plotGraph(jrgraph)
 ```
 
